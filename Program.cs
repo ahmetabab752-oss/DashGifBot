@@ -1,5 +1,7 @@
-﻿using System;
+using System;
 using System.IO;
+using System.Net;
+using System.Text;
 using System.Net.Http;
 using System.Threading.Tasks;
 using Discord;
@@ -21,6 +23,9 @@ class Program
 
     public async Task RunBotAsync()
     {
+        // 🚀 Render uyanık kalma web sunucusunu bot başlarken burada ateşliyoruz reis:
+        StartHttpServer();
+
         var config = new DiscordSocketConfig
         {
             GatewayIntents = GatewayIntents.AllUnprivileged | GatewayIntents.MessageContent
@@ -110,5 +115,38 @@ class Program
         gifImage.Save(outputPath, new GifEncoder());
 
         return outputPath;
+    }
+
+    // 🟢 BOTUN RENDER'DA 7/24 UYANIK KALMASINI SAĞLAYAN WEB SUNUCUSU:
+    public static void StartHttpServer()
+    {
+        Task.Run(async () =>
+        {
+            try
+            {
+                var listener = new HttpListener();
+                // Render'ın bota otomatik atadığı PORT numarasını çekiyoruz, yoksa varsayılan 8080
+                string port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
+                listener.Prefixes.Add($"http://*:{port}/");
+                listener.Start();
+                Console.WriteLine($"[Web Sunucu] Uyanık kalma portu dinleniyor: {port}");
+
+                while (true)
+                {
+                    var context = await listener.GetContextAsync();
+                    var response = context.Response;
+                    string responseString = "Bot aslanlar gibi uyanık!";
+                    byte[] buffer = Encoding.UTF8.GetBytes(responseString);
+                    
+                    response.ContentLength64 = buffer.Length;
+                    await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                    response.OutputStream.Close();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Web Sunucu Hatası] {ex.Message}");
+            }
+        });
     }
 }
