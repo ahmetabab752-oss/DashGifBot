@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Builder;
 using Discord;
 using Discord.WebSocket;
 using System;
@@ -6,39 +5,50 @@ using System.Threading.Tasks;
 
 class Program
 {
-    private static DiscordSocketClient _client = null!;
-
     static async Task Main(string[] args)
     {
-        var botTask = RunBotAsync();
-        var builder = WebApplication.CreateBuilder(args);
-        var app = builder.Build();
-        app.MapGet("/", () => "Bot ayakta!");
-        await Task.WhenAll(botTask, app.RunAsync());
+        // Sonsuz hata korumalı döngü: Bot bir şekilde düşerse 5 sn sonra yeniden başlatır
+        while (true)
+        {
+            try
+            {
+                await StartBotAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ HATA: {ex.Message}");
+                await Task.Delay(5000); 
+            }
+        }
     }
 
-    public static async Task RunBotAsync()
+    static async Task StartBotAsync()
     {
-        var config = new DiscordSocketConfig { GatewayIntents = GatewayIntents.All | GatewayIntents.MessageContent };
-        _client = new DiscordSocketClient(config);
+        var client = new DiscordSocketClient(new DiscordSocketConfig 
+        { 
+            GatewayIntents = GatewayIntents.All | GatewayIntents.MessageContent 
+        });
 
-        _client.Ready += async () => {
-            string yayınMetni = "Dash Shop Aktif!";
-            string twitchLink = "https://www.twitch.tv/monstercat";
-            await _client.SetGameAsync(yayınMetni, twitchLink, ActivityType.Streaming);
-            Console.WriteLine("✅ BOT BAĞLANDI VE YAYINA GİRDİ!");
+        client.Ready += async () => {
+            // Yayında modu - Mor İkon İçin
+            await client.SetGameAsync("Dash Shop Aktif!", "https://www.twitch.tv/monstercat", ActivityType.Streaming);
+            Console.WriteLine("✅ BOT 7/24 AKTİF!");
         };
 
-        _client.MessageReceived += async (message) =>
+        client.MessageReceived += async (message) =>
         {
             if (message.Author.IsBot || !message.Content.ToLower().StartsWith("!intro ")) return;
 
             string tur = message.Content.ToLower().Replace("!intro ", "").Trim();
-            await message.Channel.SendMessageAsync($"🎬 **{tur.ToUpper()}** stili için intro talebin alındı reis, kısa süre içinde sana dönüş yapacağım!");
+            await message.Channel.SendMessageAsync($"🎬 **{tur.ToUpper()}** stili için talebin alındı reis!");
         };
 
-        await _client.LoginAsync(TokenType.Bot, Environment.GetEnvironmentVariable("GIF_BOT_TOKEN"));
-        await _client.StartAsync();
+        // Render'daki ortam değişkeninden token'ı çek
+        string? token = Environment.GetEnvironmentVariable("GIF_BOT_TOKEN");
+        await client.LoginAsync(TokenType.Bot, token);
+        await client.StartAsync();
+
+        // Sonsuz döngü (Botun kapanmaması için)
         await Task.Delay(-1);
     }
-}
+}    
