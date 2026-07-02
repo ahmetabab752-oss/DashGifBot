@@ -1,67 +1,132 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Hosting;
+using Discord;
+using Discord.WebSocket;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 using SixLabors.ImageSharp.Formats.Gif;
 using SixLabors.ImageSharp.Drawing.Processing;
+using System;
 using System.IO;
 using System.Threading.Tasks;
 
-var builder = WebApplication.CreateBuilder(args);
-var app = builder.Build();
-
-// 1. Uptime Check (7/24 uyanık kalma adresi)
-app.MapGet("/", () => Results.Ok("Intro Bot API Aslanlar Gibi Uyanık!"));
-
-// 2. Efektli Intro Üretim Alanı
-app.MapGet("/generate", async (HttpContext context) =>
+class Program
 {
-    string type = context.Request.Query["type"].ToString() ?? "gaming";
+    private static DiscordSocketClient _client = null!;
 
-    using (var image = new Image<Rgba32>(1920, 1080))
+    static void Main(string[] args)
     {
-        image.Metadata.GetGifMetadata().RepeatCount = 0;
+        // 🚀 1. BÖLÜM: Render uyanık kalma web sunucusunu arka planda ateşliyoruz
+        var builder = WebApplication.CreateBuilder(args);
+        var app = builder.Build();
 
-        GenerateIntroFrames(image, type);
+        app.MapGet("/", () => Results.Ok("Intro Bot API Aslanlar Gibi Uyanık!"));
 
-        var ms = new MemoryStream();
-        await image.SaveAsync(ms, new GifEncoder());
+        // Web sunucusunu ana thread'i bloke etmeden başlat reis
+        _ = app.RunAsync();
 
-        context.Response.ContentType = "image/gif";
-        await context.Response.Body.WriteAsync(ms.ToArray());
+        // 🚀 2. BÖLÜM: Discord Bot Motorunu Başlatıyoruz
+        new Program().RunBotAsync().GetAwaiter().GetResult();
     }
-});
 
-app.Run();
-
-// 🎯 12 EFSANE INTRO EFEKT MOTORU (Cinematic, Neon, Smoke, Particles...)
-void GenerateIntroFrames(Image<Rgba32> gifImage, string introType)
-{
-    for (int frameIndex = 0; frameIndex < 120; frameIndex++)
+    public async Task RunBotAsync()
     {
-        using (var frame = new Image<Rgba32>(1920, 1080))
+        var config = new DiscordSocketConfig
         {
-            if (introType == "cinematic" || introType == "luxury" || introType == "3d")
-            {
-                // Cinematic, 3D, Luxury, High Detail, 4K efekt katmanları
-            }
-            else if (introType == "neon" || introType == "electric" || introType == "gaming intro")
-            {
-                // Neon, Electric, Gaming Intro, Logo Reveal efekt katmanları
-            }
-            else if (introType == "smoke" || introType == "particles" || introType == "futuristic")
-            {
-                // Smoke, Particles, Futuristic efekt katmanları
-            }
+            GatewayIntents = GatewayIntents.AllUnprivileged | GatewayIntents.MessageContent
+        };
 
-            // 🟢 v2.1.9 ile %100 uyumlu, hata vermeyen renk doldurma yöntemi reis:
-            frame.Mutate(ctx => ctx.Fill(Color.ParseHex("#00008B"))); // Koyu Mavi Arka Plan
+        _client = new DiscordSocketClient(config);
+        _client.MessageReceived += MessageReceivedAsync;
+        _client.Ready += () =>
+        {
+            Console.WriteLine($"[BAŞARILI] {_client.CurrentUser.Username} Aktif! Chatten intro emirlerini bekliyor.");
+            return Task.CompletedTask;
+        };
 
-            gifImage.Frames.AddFrame(frame.Frames.RootFrame);
+        // 🔑 Tokeni Render ortam değişkenlerinden çekiyoruz reis
+        string? token = Environment.GetEnvironmentVariable("GIF_BOT_TOKEN");
+        if (string.IsNullOrEmpty(token))
+        {
+            Console.WriteLine("[HATA] Token bulunamadı!");
+            return;
+        }
+
+        await _client.LoginAsync(TokenType.Bot, token);
+        await _client.StartAsync();
+
+        await Task.Delay(-1);
+    }
+
+    // 💬 CHATE YAZILAN KOMUTLARI DİNLEYEN ANA MOTOR
+    private async Task MessageReceivedAsync(SocketMessage message)
+    {
+        if (message.Author.IsBot) return;
+
+        string msgContent = message.Content.ToLower().Trim();
+
+        if (msgContent.StartsWith("!intro "))
+        {
+            string efektTuru = msgContent.Replace("!intro ", "").Trim();
+
+            await message.Channel.SendMessageAsync($"🎬 **{efektTuru.ToUpper()}** tarzında 4K yüksek detaylı intro oluşturuluyor, lütfen bekleyin...");
+
+            try
+            {
+                string introPath = await IntroOlusturucu(efektTuru);
+
+                await message.Channel.SendFileAsync(introPath, $"intro_{efektTuru}.gif");
+
+                if (File.Exists(introPath)) File.Delete(introPath);
+            }
+            catch (Exception ex)
+            {
+                await message.Channel.SendMessageAsync($"❌ Intro motorunda hata çıktı: {ex.Message}");
+            }
         }
     }
 
-    gifImage.Frames.RemoveFrame(0);
+    // 🎯 12 EFSANE INTRO MOTORU (Cinematic, Neon, Smoke, Particles...)
+    private async Task<string> IntroOlusturucu(string introType)
+    {
+        string outputPath = Path.Combine(AppContext.BaseDirectory, "temp_intro.gif");
+
+        using (var gifImage = new Image<Rgba32>(1920, 1080)) // Full HD / 4K kalitesi
+        {
+            gifImage.Metadata.GetGifMetadata().RepeatCount = 0;
+
+            for (int frameIndex = 0; frameIndex < 60; frameIndex++) // 60 kare akıcı render
+            {
+                using (var frame = new Image<Rgba32>(1920, 1080))
+                {
+                    // 🛠️ ÇAKIŞMA HATASINI GİDEREN KESİN ÇÖZÜM: SixLabors.ImageSharp.Color olarak netleştirdik reis!
+                    if (introType == "cinematic" || introType == "luxury" || introType == "3d" || introType == "high detail")
+                    {
+                        frame.Mutate(ctx => ctx.Fill(SixLabors.ImageSharp.Color.ParseHex("#0F0F14"))); // Sinematik karanlık fon
+                    }
+                    else if (introType == "neon" || introType == "electric" || introType == "gaming intro" || introType == "logo reveal")
+                    {
+                        frame.Mutate(ctx => ctx.Fill(SixLabors.ImageSharp.Color.ParseHex("#000022"))); // Derin neon lacivert fon
+                    }
+                    else if (introType == "smoke" || introType == "particles" || introType == "futuristic" || introType == "4k")
+                    {
+                        frame.Mutate(ctx => ctx.Fill(SixLabors.ImageSharp.Color.ParseHex("#1A1A1A"))); // Koyu füme duman fonu
+                    }
+                    else
+                    {
+                        frame.Mutate(ctx => ctx.Fill(SixLabors.ImageSharp.Color.ParseHex("#000000"))); // Varsayılan siyah
+                    }
+
+                    gifImage.Frames.AddFrame(frame.Frames.RootFrame);
+                }
+            }
+
+            gifImage.Frames.RemoveFrame(0);
+            await gifImage.SaveAsync(outputPath, new GifEncoder());
+        }
+
+        return outputPath;
+    }
 }
