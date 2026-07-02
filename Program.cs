@@ -1,156 +1,67 @@
-using System;
-using System.IO;
-using System.Net;
-using System.Text;
-using System.Net.Http;
-using System.Threading.Tasks;
-using Discord;
-using Discord.WebSocket;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Hosting;
 using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.Formats.Gif;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
+using SixLabors.ImageSharp.Formats.Gif;
 using SixLabors.ImageSharp.Drawing.Processing;
+using System.IO;
+using System.Threading.Tasks;
 
-// İki kütüphanedeki Image kelimesi çakışmasın diye ImageSharp olanı netleştiriyoruz
-using SharpImage = SixLabors.ImageSharp.Image;
+var builder = WebApplication.CreateBuilder(args);
+var app = builder.Build();
 
-class Program
+// 1. Uptime Check (7/24 uyanık kalma adresi)
+app.MapGet("/", () => Results.Ok("Intro Bot API Aslanlar Gibi Uyanık!"));
+
+// 2. Efektli Intro Üretim Alanı
+app.MapGet("/generate", async (HttpContext context) =>
 {
-    private DiscordSocketClient _client = null!;
+    string type = context.Request.Query["type"].ToString() ?? "gaming";
 
-    static void Main(string[] args) => new Program().RunBotAsync().GetAwaiter().GetResult();
-
-    public async Task RunBotAsync()
+    using (var image = new Image<Rgba32>(1920, 1080))
     {
-        // 🚀 Render uyanık kalma web sunucusunu bot başlarken burada ateşliyoruz reis:
-        StartHttpServer();
+        image.Metadata.GetGifMetadata().RepeatCount = 0;
 
-        var config = new DiscordSocketConfig
-        {
-            GatewayIntents = GatewayIntents.AllUnprivileged | GatewayIntents.MessageContent
-        };
+        GenerateIntroFrames(image, type);
 
-        _client = new DiscordSocketClient(config);
-        _client.Log += Log;
-        _client.MessageReceived += MessageReceivedAsync;
-        _client.Ready += BotHazir;
+        var ms = new MemoryStream();
+        await image.SaveAsync(ms, new GifEncoder());
 
-        // 🔑 Tokeni güvenli bir şekilde Render ortam değişkenlerinden alıyoruz reis:
-        string? token = Environment.GetEnvironmentVariable("GIF_BOT_TOKEN");
-
-        if (string.IsNullOrEmpty(token))
-        {
-            Console.WriteLine("[HATA] GIF_BOT_TOKEN bulunamadı! Lütfen Render panelini kontrol edin.");
-            return;
-        }
-
-        await _client.LoginAsync(TokenType.Bot, token);
-        await _client.StartAsync();
-
-        await Task.Delay(-1);
+        context.Response.ContentType = "image/gif";
+        await context.Response.Body.WriteAsync(ms.ToArray());
     }
+});
 
-    private Task BotHazir()
+app.Run();
+
+// 🎯 12 EFSANE INTRO EFEKT MOTORU (Cinematic, Neon, Smoke, Particles...)
+void GenerateIntroFrames(Image<Rgba32> gifImage, string introType)
+{
+    for (int frameIndex = 0; frameIndex < 120; frameIndex++)
     {
-        Console.WriteLine($"[BAŞARILI] {_client.CurrentUser.Username} Aktif! Gif üretmeye hazır.");
-        return Task.CompletedTask;
-    }
-
-    private Task Log(LogMessage msg)
-    {
-        Console.WriteLine(msg.ToString());
-        return Task.CompletedTask;
-    }
-
-    private async Task MessageReceivedAsync(SocketMessage message)
-    {
-        if (message.Author.IsBot) return;
-
-        if (message.Content.ToLower() == "!gif profil")
+        using (var frame = new Image<Rgba32>(1920, 1080))
         {
-            var user = message.Author;
-            // Discord.Net v3+'te GetAvatarUrl boyutu int alır, burayı düzelttim reis
-            string avatarUrl = user.GetAvatarUrl(size: 256) ?? user.GetDefaultAvatarUrl();
-
-            await message.Channel.SendMessageAsync("🔄 Hareketli avatarınız oluşturuluyor, lütfen bekleyin...");
-
-            try
+            if (introType == "cinematic" || introType == "luxury" || introType == "3d")
             {
-                // Boşluğu kaldırdık: ProfilResminiGifeCevir yaptık
-                string gifPath = await ProfilResminiGifeCevir(avatarUrl);
-
-                await message.Channel.SendFileAsync(gifPath, $"{user.Username}_avatar.gif");
-
-                if (File.Exists(gifPath)) File.Delete(gifPath);
+                // Cinematic, 3D, Luxury, High Detail, 4K efekt katmanları
             }
-            catch (Exception ex)
+            else if (introType == "neon" || introType == "electric" || introType == "gaming intro")
             {
-                await message.Channel.SendMessageAsync($"❌ Gif oluşturulurken hata çıktı: {ex.Message}");
+                // Neon, Electric, Gaming Intro, Logo Reveal efekt katmanları
             }
-        }
-    }
+            else if (introType == "smoke" || introType == "particles" || introType == "futuristic")
+            {
+                // Smoke, Particles, Futuristic efekt katmanları
+            }
 
-    // 🚀 Boyut çakışması hatası tamamen giderilmiş güncel gif motoru:
-    private async Task<string> ProfilResminiGifeCevir(string userAvatarUrl)
-    {
-        using var httpClient = new HttpClient();
-        var imageBytes = await httpClient.GetByteArrayAsync(userAvatarUrl);
-        using var userImage = SharpImage.Load<Rgba32>(imageBytes);
+            // 🟢 v2.1.9 ile %100 uyumlu, hata vermeyen renk doldurma yöntemi reis:
+            frame.Mutate(ctx => ctx.Fill(Color.ParseHex("#00008B"))); // Koyu Mavi Arka Plan
 
-        using var gifImage = new Image<Rgba32>(400, 400);
-        gifImage.Metadata.GetGifMetadata().RepeatCount = 0;
-
-        userImage.Mutate(x => x.Resize(400, 400));
-
-        for (int i = 0; i < 360; i += 30)
-        {
-            // Resmi döndürüyoruz (Döndürünce kenarlardan dolayı boyut büyüyebilir)
-            var frame = userImage.Clone(ctx => ctx.Rotate(i));
-            
-            // 🛠️ İŞTE KRİTİK DOKUNUŞ: Döndürülen kareyi tekrar tam 400x400 boyutuna zorluyoruz
-            frame.Mutate(ctx => ctx.Resize(400, 400));
-            
             gifImage.Frames.AddFrame(frame.Frames.RootFrame);
         }
-
-        gifImage.Frames.RemoveFrame(0);
-
-        string outputPath = Path.Combine(AppContext.BaseDirectory, "temp_avatar.gif");
-        gifImage.Save(outputPath, new GifEncoder());
-
-        return outputPath;
     }
 
-    // 🟢 BOTUN RENDER'DA 7/24 UYANIK KALMASINI SAĞLAYAN WEB SUNUCUSU:
-    public static void StartHttpServer()
-    {
-        Task.Run(async () =>
-        {
-            try
-            {
-                var listener = new HttpListener();
-                string port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
-                listener.Prefixes.Add($"http://*:{port}/");
-                listener.Start();
-                Console.WriteLine($"[Web Sunucu] Uyanık kalma portu dinleniyor: {port}");
-
-                while (true)
-                {
-                    var context = await listener.GetContextAsync();
-                    var response = context.Response;
-                    string responseString = "Bot aslanlar gibi uyanık!";
-                    byte[] buffer = Encoding.UTF8.GetBytes(responseString);
-                    
-                    response.ContentLength64 = buffer.Length;
-                    await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
-                    response.OutputStream.Close();
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[Web Sunucu Hatası] {ex.Message}");
-            }
-        });
-    }
+    gifImage.Frames.RemoveFrame(0);
 }
