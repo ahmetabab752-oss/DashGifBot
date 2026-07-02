@@ -13,7 +13,7 @@ class Program
         var botTask = RunBotAsync();
         var builder = WebApplication.CreateBuilder(args);
         var app = builder.Build();
-        app.MapGet("/", () => "Bot ayakta ve görevine hazır!");
+        app.MapGet("/", () => "Bot ayakta!");
         await Task.WhenAll(botTask, app.RunAsync());
     }
 
@@ -23,9 +23,10 @@ class Program
         _client = new DiscordSocketClient(config);
 
         _client.Ready += async () => {
-            // Yayında modu aktif
-            await _client.SetGameAsync("Dash Shop Aktif!", null, ActivityType.Streaming);
-            Console.WriteLine("✅ BOT BAĞLANDI VE YAYINDA!");
+            string yayınMetni = "Dash Shop Aktif!";
+            string twitchLink = "https://www.twitch.tv/monstercat";
+            await _client.SetGameAsync(yayınMetni, twitchLink, ActivityType.Streaming);
+            Console.WriteLine("✅ BOT BAĞLANDI VE YAYINA GİRDİ!");
         };
 
         _client.MessageReceived += async (message) =>
@@ -33,8 +34,6 @@ class Program
             if (message.Author.IsBot || !message.Content.ToLower().StartsWith("!intro ")) return;
 
             string tur = message.Content.ToLower().Replace("!intro ", "").Trim();
-
-            // Gif yok, sadece metin cevabı
             await message.Channel.SendMessageAsync($"🎬 **{tur.ToUpper()}** stili için intro talebin alındı reis, kısa süre içinde sana dönüş yapacağım!");
         };
 
