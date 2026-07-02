@@ -91,7 +91,7 @@ class Program
         }
     }
 
-    // 🚀 Boşluk hatası ve Image çakışması tamamen çözülmüş ana motorumuz:
+    // 🚀 Boyut çakışması hatası tamamen giderilmiş güncel gif motoru:
     private async Task<string> ProfilResminiGifeCevir(string userAvatarUrl)
     {
         using var httpClient = new HttpClient();
@@ -105,7 +105,12 @@ class Program
 
         for (int i = 0; i < 360; i += 30)
         {
+            // Resmi döndürüyoruz (Döndürünce kenarlardan dolayı boyut büyüyebilir)
             var frame = userImage.Clone(ctx => ctx.Rotate(i));
+            
+            // 🛠️ İŞTE KRİTİK DOKUNUŞ: Döndürülen kareyi tekrar tam 400x400 boyutuna zorluyoruz
+            frame.Mutate(ctx => ctx.Resize(400, 400));
+            
             gifImage.Frames.AddFrame(frame.Frames.RootFrame);
         }
 
@@ -125,7 +130,6 @@ class Program
             try
             {
                 var listener = new HttpListener();
-                // Render'ın bota otomatik atadığı PORT numarasını çekiyoruz, yoksa varsayılan 8080
                 string port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
                 listener.Prefixes.Add($"http://*:{port}/");
                 listener.Start();
