@@ -31,7 +31,7 @@ class Program
 
         client.Ready += async () => {
             // Yayında modu - Mor İkon İçin
-            await client.SetGameAsync("Dash Shop Aktif!", "https://www.twitch.tv/monstercat", ActivityType.Streaming);
+            await client.SetGameAsync("Rozue Shop Aktif!", "https://www.twitch.tv/monstercat", ActivityType.Streaming);
             Console.WriteLine("✅ BOT 7/24 AKTİF!");
         };
 
